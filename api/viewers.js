@@ -20,19 +20,26 @@ router.get('/', (req, res) => {
 
 router.post('/', (req, res) => {
   const { action, sessionId } = req.body;
-  if (!sessionId || !['join','heartbeat','leave'].includes(action)) {
-    console.log("Invalid input")
+
+  if (!sessionId || !['join', 'heartbeat', 'leave'].includes(action)) {
+    console.log("Invalid input");
     return res.status(400).json({ error: 'Invalid input' });
   }
+
   if (action === 'join' || action === 'heartbeat') {
-    console.log("Session " + sessionId + " registered")
+    const isNew = !sessions.has(sessionId);
     sessions.set(sessionId, Date.now());
+    if (isNew) {
+      console.log("Session " + sessionId + " registered");
+    }
   } else {
-    console.log("Session " + sessionId + " removed")
+    console.log("Session " + sessionId + " removed");
     sessions.delete(sessionId);
   }
+
   cleanupSessions();
   res.json({ count: sessions.size });
 });
+
 
 module.exports = router;
