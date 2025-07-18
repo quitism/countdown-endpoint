@@ -7,7 +7,7 @@ const sessions = new Map();
 function cleanupSessions() {
   const now = Date.now();
   for (const [id, lastSeen] of sessions) {
-    if (now - lastSeen > 60_000) { sessions.delete(id) ; console.log("Cleaned up inactive session " + id) };
+    if (now - lastSeen > 40_000) { sessions.delete(id) ; console.log("Cleaned up inactive session " + id) };
   }
 }
 setInterval(cleanupSessions, 15_000);
