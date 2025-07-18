@@ -7,24 +7,28 @@ const sessions = new Map();
 function cleanupSessions() {
   const now = Date.now();
   for (const [id, lastSeen] of sessions) {
-    if (now - lastSeen > 90_000) sessions.delete(id);
+    if (now - lastSeen > 90_000) { sessions.delete(id) ; console.log("Cleaned up inactive session " + id) };
   }
 }
-setInterval(cleanupSessions, 30_000);
+setInterval(cleanupSessions, 15_000);
 
 router.get('/', (req, res) => {
   cleanupSessions();
+  console.log("Returned " + sessions.size)
   res.json({ count: sessions.size });
 });
 
 router.post('/', (req, res) => {
   const { action, sessionId } = req.body;
   if (!sessionId || !['join','heartbeat','leave'].includes(action)) {
+    console.log("Invalid input")
     return res.status(400).json({ error: 'Invalid input' });
   }
   if (action === 'join' || action === 'heartbeat') {
+    console.log("Session " + sessionId + " registered")
     sessions.set(sessionId, Date.now());
   } else {
+    console.log("Session " + sessionId + " removed")
     sessions.delete(sessionId);
   }
   cleanupSessions();
