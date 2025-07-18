@@ -15,6 +15,20 @@ function cleanupSessions() {
 // Auto-clean sessions every 30 seconds
 setInterval(cleanupSessions, 30_000);
 
+// Middleware to add CORS headers
+router.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*'); // Allow all origins, change if needed
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+
+    // Handle OPTIONS preflight
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(204); // No Content
+    }
+
+    next();
+});
+
 router.get('/', (req, res) => {
     cleanupSessions();
     res.json({ count: sessions.size });
