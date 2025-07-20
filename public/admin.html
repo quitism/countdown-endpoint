@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #1a1a1a; color: #f0f0f0; margin: 0; display: flex; height: 100vh; }
+        .container { display: flex; width: 100%; }
+        #chat-view { flex-grow: 1; padding: 20px; display: flex; flex-direction: column; border-right: 1px solid #333; }
+        #chat-messages { flex-grow: 1; overflow-y: auto; border: 1px solid #444; background-color: #222; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
+        .message { margin-bottom: 10px; padding: 8px; border-radius: 5px; background-color: #333; line-height: 1.4; }
+        .message .meta { font-size: 0.8em; color: #888; margin-bottom: 4px; }
+        .message .username { font-weight: bold; color: #58a6ff; }
+        .message .username.admin { color: #f97583; }
+        #moderation-panel { width: 300px; padding: 20px; background-color: #252525; }
+        h1, h2 { border-bottom: 1px solid #444; padding-bottom: 10px; }
+        input, button { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #444; background-color: #333; color: #f0f0f0; box-sizing: border-box; }
+        button { cursor: pointer; background-color: #58a6ff; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="chat-view">
+            <h1>Live Chat View</h1>
+            <div id="chat-messages"></div>
+        </div>
+        <div id="moderation-panel">
+            <h2>Moderation</h2>
+            <input type="text" id="user-id-input" placeholder="Enter User ID">
+            <button id="mute-btn">Mute User</button>
+            <button id="suspend-btn">Suspend User</button>
+            <button id="blacklist-btn">Blacklist User</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const chatMessages = document.getElementById('chat-messages');
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(`${wsProtocol}//${window.location.host}`);
+
+            function addMessageToView(msg) {
+                const { user_id, username, is_admin, content, timestamp } = msg.payload;
+                const messageEl = document.createElement('div');
+                messageEl.classList.add('message');
+                
+                const isAdminClass = is_admin ? 'admin' : '';
+                
+                messageEl.innerHTML = `
+                    <div class="meta">
+                        <span class="username ${isAdminClass}">${username}</span>
+                        <span class="user-id">(ID: ${user_id})</span>
+                        <span class="timestamp">- ${new Date(timestamp).toLocaleTimeString()}</span>
+                    </div>
+                    <div class="content">${content.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
+                `;
+                chatMessages.appendChild(messageEl);
+                chatMessages.scrollTop = chatMessages.scrollHeight; // Auto-scroll
+            }
+
+            ws.onopen = () => {
+                console.log('Admin WebSocket connected.');
+                // Fetch initial chat history
+                fetch('/admin/chat-history')
+                    .then(res => res.json())
+                    .then(history => {
+                        history.forEach(msg => {
+                            const formattedMsg = {
+                                payload: {
+                                    user_id: msg.profiles.id,
+                                    username: msg.profiles.username,
+                                    is_admin: msg.profiles.is_admin,
+                                    content: msg.content,
+                                    timestamp: msg.created_at
+                                }
+                            };
+                            addMessageToView(formattedMsg);
+                        });
+                    });
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'chat_message') {
+                    addMessageToView(data);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('Admin WebSocket Error:', error);
+            };
+        });
+    </script>
+</body>
+</html>

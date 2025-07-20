@@ -3,8 +3,15 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../supabaseClient');
 
+// Add the express.json() middleware here to parse request bodies
+router.use(express.json());
+
 // Signup Endpoint
 router.post('/signup', async (req, res) => {
+    // This check is important to prevent the 'destructure' error if body is empty
+    if (!req.body) {
+        return res.status(400).json({ error: 'Request body is missing.' });
+    }
     const { username, password } = req.body;
 
     if (!username || !password || username.length > 16) {
@@ -29,7 +36,7 @@ router.post('/signup', async (req, res) => {
         // Create the user in Supabase Auth
         const { data: { user }, error: authError } = await supabase.auth.signUp({
             // We use the username as the email for simplicity, as email is required by Supabase Auth
-            email: `${username}@catweb.local`, 
+            email: `${username}@sytesn.netlify.app`, 
             password: password,
         });
 
@@ -52,6 +59,9 @@ router.post('/signup', async (req, res) => {
 
 // Login Endpoint
 router.post('/login', async (req, res) => {
+    if (!req.body) {
+        return res.status(400).json({ error: 'Request body is missing.' });
+    }
     const { username, password } = req.body;
 
     if (!username || !password) {
@@ -60,7 +70,7 @@ router.post('/login', async (req, res) => {
 
     try {
         const { data, error } = await supabase.auth.signInWithPassword({
-            email: `${username}@catweb.local`,
+            email: `${username}@sytesn.netlify.app`,
             password: password,
         });
 
@@ -71,7 +81,8 @@ router.post('/login', async (req, res) => {
             access_token: data.session.access_token 
         });
 
-    } catch (error) {
+    } catch (error)
+    {
         console.error('Login Error:', error);
         res.status(401).json({ error: 'Invalid credentials.' });
     }
