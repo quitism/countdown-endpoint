@@ -1,4 +1,3 @@
-// server.js
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
@@ -12,12 +11,10 @@ const wss = new WebSocket.Server({ server });
 const adminRoutes = require('./api/admin');
 const supabase = require('./supabaseClient');
 
-// Serve frontend & admin UI
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/admin', adminRoutes(wss));
 
-// Broadcast helpers
 function broadcast(data) {
   wss.clients.forEach(c => {
     if (c.readyState === WebSocket.OPEN) c.send(JSON.stringify(data));
@@ -27,21 +24,16 @@ function broadcastViewerCount() {
   broadcast({ type: 'viewer_count', count: wss.clients.size });
 }
 
-// On new WS connection
-const clients = new Map();      // ws → { user }
-const userCooldowns = new Map(); // userId → timestamp
+const clients = new Map();      
+const userCooldowns = new Map();
 
 wss.on('connection', (ws) => {
   console.log('Client connected');
-  // Send initial viewer count
   ws.send(JSON.stringify({ type: 'viewer_count', count: wss.clients.size }));
   broadcastViewerCount();
-
-  // Helper to load & send full chat history
+	
 	async function sendChatHistory() {
 	  try {
-		// Step 1: Fetch all messages and their direct profiles, including replying_to_id
-		// DO NOT include nested 'replying_to_id ( ... )' select here
 		const { data: rows, error: messagesError } = await supabase
 		  .from('messages')
 		  .select(`
@@ -58,7 +50,6 @@ wss.on('connection', (ws) => {
 		  throw messagesError;
 		}
 
-		// Step 2: Collect all unique replying_to_id values
 		const uniqueReplyingToIds = new Set();
 		rows.forEach(row => {
 		  if (row.replying_to_id) {
@@ -68,19 +59,16 @@ wss.on('connection', (ws) => {
 
 		let repliedMessagesMap = new Map();
 		if (uniqueReplyingToIds.size > 0) {
-		  // Step 3: Fetch all unique replied-to messages in one batch query
 		  const { data: repliedMessages, error: repliedMessagesError } = await supabase
 			.from('messages')
 			.select('id, content, profiles ( username )')
-			.in('id', Array.from(uniqueReplyingToIds)); // Use .in() for batch fetching
+			.in('id', Array.from(uniqueReplyingToIds));
 
 		  if (repliedMessagesError) {
 			console.error('Error fetching replied messages:', repliedMessagesError);
-			// Continue without reply data if there's an error fetching them
 		  } else {
-			// Create a map for quick lookup
 			repliedMessages.forEach(msg => {
-			  if (msg.profiles) { // Ensure profile data exists
+			  if (msg.profiles) {
 				repliedMessagesMap.set(msg.id, {
 				  content: msg.content,
 				  username: msg.profiles.username
@@ -89,8 +77,6 @@ wss.on('connection', (ws) => {
 			});
 		  }
 		}
-
-		// Step 4: Transform rows into our final payload, looking up reply data from the map
 		const history = rows.map(r => {
 		  const replyingToData = r.replying_to_id ? repliedMessagesMap.get(r.replying_to_id) : null;
 
@@ -126,7 +112,6 @@ wss.on('connection', (ws) => {
       }));
     }
 
-    // ─── SIGNUP ───────────────────────────────────────────────
     if (data.type === 'signup') {
       const { username, password } = data.payload || {};
       if (!username || !password) {
@@ -156,7 +141,6 @@ wss.on('connection', (ws) => {
       return;
     }
 
-    // ─── LOGIN ────────────────────────────────────────────────
     if (data.type === 'login') {
       const { username, password } = data.payload || {};
       if (!username || !password) {
@@ -174,7 +158,7 @@ wss.on('connection', (ws) => {
         if (loginErr) throw loginErr;
 
         const token = loginData.session.access_token;
-        // Lookup profile and cache it
+
         const { data: profileData, error: profErr } = await supabase
           .from('profiles')
           .select('id, username, is_admin')
@@ -183,7 +167,6 @@ wss.on('connection', (ws) => {
         if (profErr) throw profErr;
         clients.set(ws, { user: profileData });
 
-        // Send login success + history
         ws.send(JSON.stringify({
           type: 'login_success',
           payload: { token, user: profileData }
@@ -199,7 +182,6 @@ wss.on('connection', (ws) => {
       return;
     }
 
-    // ─── RE-AUTHENTICATE TOKEN ────────────────────────────────
     if (data.type === 'authenticate') {
       try {
         const { data: { user }, error: uErr } =
@@ -214,7 +196,6 @@ wss.on('connection', (ws) => {
         if (profErr) throw profErr;
         clients.set(ws, { user: profileData });
 
-        // Send login success + history
         ws.send(JSON.stringify({
           type: 'login_success',
           payload: { token: data.token, user: profileData }
@@ -230,9 +211,7 @@ wss.on('connection', (ws) => {
       return;
     }
 
-    
 
-    // ─── CHAT MESSAGE ─────────────────────────────────────────
     if (data.type === 'chat_message') {
       const client = clients.get(ws);
       if (!client) {
@@ -255,7 +234,6 @@ wss.on('connection', (ws) => {
 
       userCooldowns.set(client.user.id, now);
 
-      // Persist
       const { data: message, error } = await supabase.from('messages').insert({
         user_id: client.user.id,
         content: content.trim().slice(0, 500),
@@ -266,8 +244,7 @@ wss.on('connection', (ws) => {
         console.error('Error sending message:', error);
         return ws.send(JSON.stringify({ type: 'error', message: 'Failed to send message.' }));
       }
-
-      // If it's a reply, fetch the original message snippet to broadcast
+	    
       let replyingToData = null;
       if (replying_to_id) {
         const { data: repliedMsg, error: repliedMsgErr } = await supabase
@@ -286,7 +263,6 @@ wss.on('connection', (ws) => {
         }
       }
 
-      // Handle Mentions
       const mentionRegex = /@([a-zA-Z0-9_]+)/g;
       let match;
       const mentionedUsernames = new Set();
@@ -318,7 +294,6 @@ wss.on('connection', (ws) => {
         }
       }
 
-      // Broadcast
       broadcast({
         type: 'chat_message',
         payload: {
